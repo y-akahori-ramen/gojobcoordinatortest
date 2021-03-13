@@ -1,2 +1,10 @@
 # gojobcoordinatortest
 時間のかかるジョブを複数クライアントで分散実行させるジョブ管理システムをGo実装してみる
+
+TaskRunnerサーバーとCoordinatorサーバーで構成される。  
+TaskRunnerサーバーはジョブ実行するためのサーバー。 
+Coordinatorサーバーは登録されたTaskRunnerサーバーに対して実行を指示するサーバー。  
+TaskRunnerサーバー単体でも使用できるが、Coordinatorサーバーに登録することでCoordinator側に管理されるようになる。  
+利用者はCoordinatorに実行依頼を投げるとCoordinatorに登録されたTaskRunnerに実行タスクが振り分けられる。  
+利用者はTaskRunnerの存在を知ることなくCoordinatorの存在を知っているだけでよい。
+
