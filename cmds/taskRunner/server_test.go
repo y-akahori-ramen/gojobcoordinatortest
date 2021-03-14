@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -67,9 +66,6 @@ func TestStartWaitTask(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.ProcName != reqestData.ProcName || !reflect.DeepEqual(result.Params, reqestData.Params) {
-		t.Fatalf("レスポンスが不正")
-	}
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -107,9 +103,6 @@ func TestCancelTask(t *testing.T) {
 	err = gojobcoordinatortest.ReadJSONFromResponse(response.Result(), &result)
 	if err != nil {
 		t.Fatal(err)
-	}
-	if result.ProcName != reqestData.ProcName || !reflect.DeepEqual(result.Params, reqestData.Params) {
-		t.Fatalf("レスポンスが不正")
 	}
 
 	req, err = http.NewRequest(http.MethodPost, fmt.Sprint("/cancel/", result.ID), nil)

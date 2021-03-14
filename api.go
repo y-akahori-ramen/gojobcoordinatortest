@@ -10,7 +10,6 @@ type TaskStartRequest struct {
 
 // TaskStartResponse TaskRunnerにタスク開始APIを叩いた時のレスポンス
 type TaskStartResponse struct {
-	TaskStartRequest
 	ID string `json:"id"`
 }
 
