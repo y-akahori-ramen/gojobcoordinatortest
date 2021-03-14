@@ -20,14 +20,25 @@ type taskStatus struct {
 }
 
 type taskRunnerServer struct {
-	resultDone       chan *taskResult
-	taskStatuses     map[string]*taskStatus
-	taskStatusesLock sync.Mutex
+	resultDone        chan *taskResult
+	taskStatuses      map[string]*taskStatus
+	taskStatusesLock  sync.Mutex
+	activeTaskNumLock sync.Mutex
+	activeTaskNum     int
+	taskNumMax        int
 }
 
 func (server *taskRunnerServer) handleTaskStart(w http.ResponseWriter, r *http.Request) {
 	server.taskStatusesLock.Lock()
 	defer server.taskStatusesLock.Unlock()
+
+	server.activeTaskNumLock.Lock()
+	defer server.activeTaskNumLock.Unlock()
+
+	if server.activeTaskNum >= server.taskNumMax {
+		http.Error(w, "タスク実行数制限にひっかかりました", http.StatusInternalServerError)
+		return
+	}
 
 	var requestData gojobcoordinatortest.TaskStartRequest
 	ok := gojobcoordinatortest.ReadJSONFromRequest(w, r, &requestData)
@@ -51,7 +62,7 @@ func (server *taskRunnerServer) handleTaskStart(w http.ResponseWriter, r *http.R
 	taskID := id.String()
 
 	// タスクIDが確定するのでここでレスポンス作成　※タスク開始後にレスポンス作成失敗すると開始したタスクを止められないため
-	result := gojobcoordinatortest.TaskStartResponse{TaskStartRequest: requestData, ID: taskID}
+	result := gojobcoordinatortest.TaskStartResponse{ID: taskID}
 	err = json.NewEncoder(w).Encode(result)
 	if err != nil {
 		http.Error(w, fmt.Sprint("タスク作成に失敗しました:", err.Error()), http.StatusInternalServerError)
@@ -61,6 +72,9 @@ func (server *taskRunnerServer) handleTaskStart(w http.ResponseWriter, r *http.R
 	// タスク状態管理情報の作成
 	ctx, cancel := context.WithCancel(context.Background())
 	server.taskStatuses[taskID] = &taskStatus{reqData: requestData, result: nil, cancel: cancel}
+
+	// タスク実行数を加算
+	server.activeTaskNum++
 
 	// タスク実行
 	// タスクが完了すればserver.resultDoneチャネルに結果が送られる
@@ -149,11 +163,14 @@ func (server *taskRunnerServer) Run() {
 		case result := <-server.resultDone:
 			log.Printf("Complete Task. TaskID:%v Success:%v ReturnValues:%v\n", result.ID, result.Success, result.ResultValues)
 			server.taskStatusesLock.Lock()
+			server.activeTaskNumLock.Lock()
 			_, ok := server.taskStatuses[result.ID]
 			if ok {
 				server.taskStatuses[result.ID].result = result
 			}
+			server.activeTaskNum--
 			server.taskStatusesLock.Unlock()
+			server.activeTaskNumLock.Unlock()
 		}
 	}
 }
