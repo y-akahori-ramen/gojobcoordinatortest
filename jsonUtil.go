@@ -30,31 +30,10 @@ func ReadJSONFromRequest(w http.ResponseWriter, r *http.Request, dst interface{}
 }
 
 func ReadJSONFromResponse(res *http.Response, dst interface{}) error {
-
-	// if _, err := ioutil.ReadAll(res.Body); err != nil {
-	// 	return err
-	// }
-
 	if err := json.NewDecoder(res.Body).Decode(&dst); err != nil {
 		return err
 	}
-
 	return nil
-	// return json.NewDecoder(response.Body).Decode(&dst)
-
-	// defer res.Body.Close()
-
-	// b, err := ioutil.ReadAll(res.Body)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-	// fmt.Println(string(b))
-
-	// var response googleResponse
-	// if err := json.NewDecoder(res.Body).Decode(&response); err != nil {
-	// 	return nil, err
-	// }
-	// return &response, nil
 }
 
 // NewJSONRequest 指定したデータをJSON形式にしたHTTPリクエストを作成します
