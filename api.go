@@ -28,3 +28,24 @@ const (
 	// StatusBusy Taskが実行中な時にTaskStatusResponseのStatusで返される値
 	StatusBusy string = "StatusBusy"
 )
+
+// TaskRunnerConnectionRequest コーディネーターサーバーにTaskRunnerを接続・解除する際のリクエスト
+type TaskRunnerConnectionRequest struct {
+	Address string `json:"address"`
+}
+
+// JobStartRequest コーディネーターサーバーに送るジョブ開始リクエスト
+type JobStartRequest struct {
+	Tasks []TaskStartRequest `json:"tasks"`
+}
+
+// JobStartResponse コーディネーターサーバーへジョブ開始リクエストを行った時のレスポンス
+type JobStartResponse struct {
+	ID string `json:"id"`
+}
+
+// JobStatusResponse コーディネーターサーバーへジョブ状態取得を行った時のレスポンス
+type JobStatusResponse struct {
+	Busy         bool                  `json:"busy"`
+	TaskStatuses *[]TaskStatusResponse `json:"taskStatuses"`
+}
