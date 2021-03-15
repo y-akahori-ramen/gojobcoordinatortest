@@ -16,17 +16,12 @@ import (
 
 // coordinatorServer TaskRunnerを管理してタスクを振り分けるサーバー
 type coordinatorServer struct {
-	jobs            map[string]*job
-	runnerAddrs     map[string]interface{}
-	runnerAddrsLock sync.Mutex
-	jobsLock        sync.Mutex
+	jobs        sync.Map
+	runnerAddrs sync.Map
 }
 
 func (coordinator *coordinatorServer) newRouter() *mux.Router {
 	r := mux.NewRouter()
-
-	coordinator.jobs = make(map[string]*job)
-	coordinator.runnerAddrs = make(map[string]interface{})
 
 	// ジョブスタート
 	r.HandleFunc("/start", func(rw http.ResponseWriter, r *http.Request) {
@@ -43,7 +38,12 @@ func (coordinator *coordinatorServer) newRouter() *mux.Router {
 			return
 		}
 
-		go coordinator.jobs[jobID].Run(jobID, coordinator, &startReq)
+		job, err := coordinator.getJob(jobID)
+		if err != nil {
+			http.Error(rw, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		go job.Run(jobID, coordinator, &startReq)
 
 		response := gojobcoordinatortest.JobStartResponse{ID: jobID}
 		err = json.NewEncoder(rw).Encode(response)
@@ -122,15 +122,25 @@ func (coordinator *coordinatorServer) newRouter() *mux.Router {
 }
 
 func (coordinator *coordinatorServer) startTask(req *gojobcoordinatortest.TaskStartRequest) (string, string, error) {
-	coordinator.runnerAddrsLock.Lock()
-	defer coordinator.runnerAddrsLock.Unlock()
+	var returnAddr, returnID string
+	taskStarted := false
 
-	// 登録されているTaskRunnerに開始リクエストをおこない成功したら終了
-	for addr := range coordinator.runnerAddrs {
-		id, err := requestStartTask(addr, req)
+	startFunc := func(addr, _ interface{}) bool {
+		id, err := requestStartTask(addr.(string), req)
 		if err == nil {
-			return addr, id, nil
+			returnAddr = addr.(string)
+			returnID = id
+			taskStarted = true
+			return false
 		}
+
+		return true
+	}
+
+	coordinator.runnerAddrs.Range(startFunc)
+
+	if taskStarted {
+		return returnAddr, returnID, nil
 	}
 
 	return "", "", errors.New("タスクを開始出来ませんでした")
@@ -164,30 +174,24 @@ func requestStartTask(runnerAddr string, req *gojobcoordinatortest.TaskStartRequ
 }
 
 func (coordinator *coordinatorServer) connectRunner(runnerAddr string) error {
-	coordinator.runnerAddrsLock.Lock()
-	defer coordinator.runnerAddrsLock.Unlock()
-
-	_, exist := coordinator.runnerAddrs[runnerAddr]
+	_, exist := coordinator.runnerAddrs.Load(runnerAddr)
 	if exist == true {
 		return errors.New(fmt.Sprint("すでに接続済みです:", runnerAddr))
 	}
 
 	log.Println("TaskRunnerを接続しました:", runnerAddr)
-	coordinator.runnerAddrs[runnerAddr] = nil
+	coordinator.runnerAddrs.Store(runnerAddr, nil)
 
 	return nil
 }
 
 func (coordinator *coordinatorServer) disconnectRunner(runnerAddr string) error {
-	coordinator.runnerAddrsLock.Lock()
-	defer coordinator.runnerAddrsLock.Unlock()
-
-	_, exist := coordinator.runnerAddrs[runnerAddr]
+	_, exist := coordinator.runnerAddrs.Load(runnerAddr)
 	if exist == false {
 		return errors.New(fmt.Sprint("接続されていません:", runnerAddr))
 	}
 
-	delete(coordinator.runnerAddrs, runnerAddr)
+	coordinator.runnerAddrs.Delete(runnerAddr)
 
 	log.Println("TaskRunnerを切断しました:", runnerAddr)
 
@@ -200,28 +204,26 @@ func (coordinator *coordinatorServer) newJob() (string, error) {
 	if err != nil {
 		return "", err
 	}
-
-	coordinator.jobsLock.Lock()
-	defer coordinator.jobsLock.Unlock()
-
-	_, exist := coordinator.runnerAddrs[id.String()]
+	_, exist := coordinator.jobs.Load(id.String())
 	if exist == true {
 		return "", errors.New("ID重複")
 	}
 
-	coordinator.jobs[id.String()] = &job{}
+	coordinator.jobs.Store(id.String(), &job{})
 
 	return id.String(), nil
 }
 
 func (coordinator *coordinatorServer) getJob(jobID string) (*job, error) {
-	coordinator.jobsLock.Lock()
-	defer coordinator.jobsLock.Unlock()
-
-	job, ok := coordinator.jobs[jobID]
-	if ok {
-		return job, nil
-	} else {
+	value, ok := coordinator.jobs.Load(jobID)
+	if !ok {
 		return nil, fmt.Errorf("ジョブID %v は存在しません", jobID)
 	}
+
+	job, ok := value.(*job)
+	if !ok {
+		return nil, fmt.Errorf("ジョブID %v の取得に失敗しました", jobID)
+	}
+
+	return job, nil
 }
