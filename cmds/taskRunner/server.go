@@ -21,16 +21,17 @@ type taskStatus struct {
 
 type taskRunnerServer struct {
 	resultDone        chan *taskResult
-	taskStatuses      map[string]*taskStatus
-	taskStatusesLock  sync.Mutex
+	taskStatuses      sync.Map
 	activeTaskNumLock sync.Mutex
 	activeTaskNum     int
 	taskNumMax        int
 }
 
+func newTaskRunnerServer(taskNumMax int) *taskRunnerServer {
+	return &taskRunnerServer{taskNumMax: taskNumMax, resultDone: make(chan *taskResult)}
+}
+
 func (server *taskRunnerServer) handleTaskStart(w http.ResponseWriter, r *http.Request) {
-	server.taskStatusesLock.Lock()
-	defer server.taskStatusesLock.Unlock()
 
 	server.activeTaskNumLock.Lock()
 	defer server.activeTaskNumLock.Unlock()
@@ -71,7 +72,7 @@ func (server *taskRunnerServer) handleTaskStart(w http.ResponseWriter, r *http.R
 
 	// タスク状態管理情報の作成
 	ctx, cancel := context.WithCancel(context.Background())
-	server.taskStatuses[taskID] = &taskStatus{reqData: requestData, result: nil, cancel: cancel}
+	server.taskStatuses.Store(taskID, &taskStatus{reqData: requestData, result: nil, cancel: cancel})
 
 	// タスク実行数を加算
 	server.activeTaskNum++
@@ -85,25 +86,22 @@ func (server *taskRunnerServer) handleTaskStart(w http.ResponseWriter, r *http.R
 
 func (server *taskRunnerServer) handleCancel(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	server.taskStatusesLock.Lock()
-	defer server.taskStatusesLock.Unlock()
 
-	task, ok := server.taskStatuses[vars["taskID"]]
+	task, ok := server.getTaskStatus(vars["taskID"])
 	if !ok {
-		http.Error(w, fmt.Sprint("タスクIDが不正です:", vars["taskID"]), http.StatusNotFound)
+		http.Error(w, fmt.Sprint("タスク取得に失敗:", vars["taskID"]), http.StatusNotFound)
 		return
 	}
+
 	task.cancel()
 }
 
 func (server *taskRunnerServer) handleTaskStatus(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	server.taskStatusesLock.Lock()
-	defer server.taskStatusesLock.Unlock()
 
-	task, ok := server.taskStatuses[vars["taskID"]]
+	task, ok := server.getTaskStatus(vars["taskID"])
 	if !ok {
-		http.Error(w, fmt.Sprint("タスクIDが不正です:", vars["taskID"]), http.StatusNotFound)
+		http.Error(w, fmt.Sprint("タスク取得に失敗:", vars["taskID"]), http.StatusNotFound)
 		return
 	}
 
@@ -128,12 +126,10 @@ func (server *taskRunnerServer) handleTaskStatus(w http.ResponseWriter, r *http.
 
 func (server *taskRunnerServer) handleDelete(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	server.taskStatusesLock.Lock()
-	defer server.taskStatusesLock.Unlock()
 
-	task, ok := server.taskStatuses[vars["taskID"]]
+	task, ok := server.getTaskStatus(vars["taskID"])
 	if !ok {
-		http.Error(w, fmt.Sprint("タスクIDが不正です:", vars["taskID"]), http.StatusNotFound)
+		http.Error(w, fmt.Sprint("タスク取得に失敗:", vars["taskID"]), http.StatusNotFound)
 		return
 	}
 
@@ -142,10 +138,10 @@ func (server *taskRunnerServer) handleDelete(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	delete(server.taskStatuses, vars["taskID"])
+	server.taskStatuses.Delete(vars["taskID"])
 }
 
-func (server *taskRunnerServer) NewRouter() *mux.Router {
+func (server *taskRunnerServer) newRouter() *mux.Router {
 	r := mux.NewRouter()
 	r.HandleFunc("/start", server.handleTaskStart).Methods("POST")
 	r.HandleFunc("/cancel/{taskID}", server.handleCancel).Methods("POST")
@@ -154,22 +150,34 @@ func (server *taskRunnerServer) NewRouter() *mux.Router {
 	return r
 }
 
-func (server *taskRunnerServer) Run() {
-	server.resultDone = make(chan *taskResult)
-	server.taskStatuses = make(map[string]*taskStatus)
+func (server *taskRunnerServer) getTaskStatus(taskID string) (*taskStatus, bool) {
+	value, ok := server.taskStatuses.Load(taskID)
+	if !ok {
+		return nil, false
+	}
 
+	task, ok := value.(*taskStatus)
+	if !ok {
+		return nil, false
+	}
+
+	return task, true
+}
+
+func (server *taskRunnerServer) run() {
 	for {
 		select {
 		case result := <-server.resultDone:
 			log.Printf("Complete Task. TaskID:%v Success:%v ReturnValues:%v\n", result.ID, result.Success, result.ResultValues)
-			server.taskStatusesLock.Lock()
-			server.activeTaskNumLock.Lock()
-			_, ok := server.taskStatuses[result.ID]
+			task, ok := server.getTaskStatus(result.ID)
 			if ok {
-				server.taskStatuses[result.ID].result = result
+				task.result = result
+			} else {
+				log.Print("失敗")
 			}
+
+			server.activeTaskNumLock.Lock()
 			server.activeTaskNum--
-			server.taskStatusesLock.Unlock()
 			server.activeTaskNumLock.Unlock()
 		}
 	}

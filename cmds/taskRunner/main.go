@@ -12,10 +12,10 @@ func main() {
 	var maxTaskNum = flag.Int("maxTaskNum", 2, "同時実行できる最大タスク数")
 	flag.Parse()
 
-	server := &taskRunnerServer{taskNumMax: *maxTaskNum}
-	router := server.NewRouter()
+	server := newTaskRunnerServer(*maxTaskNum)
+	router := server.newRouter()
 	go func() {
-		server.Run()
+		server.run()
 	}()
 
 	fmt.Printf("サーバー起動します addr:%v 同時タスク実行数最大:%v\n", *addr, *maxTaskNum)

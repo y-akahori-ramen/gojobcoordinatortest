@@ -14,9 +14,9 @@ import (
 )
 
 func TestStartEchoTask(t *testing.T) {
-	server := taskRunnerServer{}
-	router := server.NewRouter()
-	go server.Run()
+	server := newTaskRunnerServer(2)
+	router := server.newRouter()
+	go server.run()
 
 	params := map[string]interface{}{
 		"Value": "EchoValue",
@@ -36,9 +36,9 @@ func TestStartEchoTask(t *testing.T) {
 }
 
 func TestStartWaitTask(t *testing.T) {
-	server := taskRunnerServer{}
-	router := server.NewRouter()
-	go server.Run()
+	server := newTaskRunnerServer(2)
+	router := server.newRouter()
+	go server.run()
 
 	params := map[string]interface{}{
 		"Sec": 2.1,
@@ -74,9 +74,9 @@ func TestStartWaitTask(t *testing.T) {
 }
 
 func TestCancelTask(t *testing.T) {
-	server := taskRunnerServer{}
-	router := server.NewRouter()
-	go server.Run()
+	server := newTaskRunnerServer(2)
+	router := server.newRouter()
+	go server.run()
 
 	params := map[string]interface{}{
 		"Sec": 2.1,
@@ -126,9 +126,9 @@ func TestCancelTask(t *testing.T) {
 }
 
 func TestDeleteTask(t *testing.T) {
-	server := taskRunnerServer{}
-	router := server.NewRouter()
-	go server.Run()
+	server := newTaskRunnerServer(2)
+	router := server.newRouter()
+	go server.run()
 
 	params := map[string]interface{}{
 		"Sec": 3,
