@@ -13,25 +13,73 @@ import (
 	"github.com/y-akahori-ramen/gojobcoordinatortest"
 )
 
+// TaskRunnerServer タスク実行管理サーバー
+type TaskRunnerServer struct {
+	resultDone        chan *TaskResult
+	taskStatuses      sync.Map
+	taskFactories     sync.Map
+	activeTaskNumLock sync.Mutex
+	activeTaskNum     uint
+	taskNumMax        uint
+}
+
+// NewTaskRunnerServer 指定した最大同時タスク実行数のTaskRunnerServerを作成する
+func NewTaskRunnerServer(taskNumMax uint) *TaskRunnerServer {
+	return &TaskRunnerServer{taskNumMax: taskNumMax, resultDone: make(chan *TaskResult)}
+}
+
+// AddFactory タスクファクトリーの登録
+func (server *TaskRunnerServer) AddFactory(procName string, f TaskFactoryFunc) error {
+	_, exist := server.taskFactories.Load(procName)
+	if exist {
+		return fmt.Errorf("%sに対応するファクトリはすでに登録されています", procName)
+	}
+
+	if f == nil {
+		return fmt.Errorf("%sに登録されるファクトリがnilです", procName)
+	}
+
+	server.taskFactories.Store(procName, f)
+	return nil
+}
+
+// NewHTTPHandler HTTPHandlerの作成
+func (server *TaskRunnerServer) NewHTTPHandler() http.Handler {
+	r := mux.NewRouter()
+	r.HandleFunc("/start", server.handleTaskStart).Methods("POST")
+	r.HandleFunc("/cancel/{taskID}", server.handleCancel).Methods("POST")
+	r.HandleFunc("/status/{taskID}", server.handleTaskStatus).Methods("GET")
+	r.HandleFunc("/delete/{taskID}", server.handleDelete).Methods("GET")
+	return r
+}
+
+// Run サーバー起動
+func (server *TaskRunnerServer) Run() {
+	for {
+		select {
+		case result := <-server.resultDone:
+			log.Printf("Complete Task. TaskID:%v Success:%v ReturnValues:%v\n", result.ID, result.Success, result.ResultValues)
+			task, ok := server.getTaskStatus(result.ID)
+			if ok {
+				task.result = result
+			} else {
+				log.Print("失敗")
+			}
+
+			server.activeTaskNumLock.Lock()
+			server.activeTaskNum--
+			server.activeTaskNumLock.Unlock()
+		}
+	}
+}
+
 type taskStatus struct {
-	result  *taskResult
+	result  *TaskResult
 	cancel  context.CancelFunc
 	reqData gojobcoordinatortest.TaskStartRequest
 }
 
-type taskRunnerServer struct {
-	resultDone        chan *taskResult
-	taskStatuses      sync.Map
-	activeTaskNumLock sync.Mutex
-	activeTaskNum     int
-	taskNumMax        int
-}
-
-func newTaskRunnerServer(taskNumMax int) *taskRunnerServer {
-	return &taskRunnerServer{taskNumMax: taskNumMax, resultDone: make(chan *taskResult)}
-}
-
-func (server *taskRunnerServer) handleTaskStart(w http.ResponseWriter, r *http.Request) {
+func (server *TaskRunnerServer) handleTaskStart(w http.ResponseWriter, r *http.Request) {
 
 	server.activeTaskNumLock.Lock()
 	defer server.activeTaskNumLock.Unlock()
@@ -48,7 +96,7 @@ func (server *taskRunnerServer) handleTaskStart(w http.ResponseWriter, r *http.R
 	}
 
 	// タスク作成
-	task, err := newTask(&requestData)
+	task, err := server.newTask(&requestData)
 	if err != nil {
 		http.Error(w, fmt.Sprint("タスク作成に失敗しました:", err.Error()), http.StatusBadRequest)
 		return
@@ -84,7 +132,7 @@ func (server *taskRunnerServer) handleTaskStart(w http.ResponseWriter, r *http.R
 	log.Printf("Start Task.　TaskID:%v ProcName:%v Params:%v\n", taskID, requestData.ProcName, requestData.Params)
 }
 
-func (server *taskRunnerServer) handleCancel(w http.ResponseWriter, r *http.Request) {
+func (server *TaskRunnerServer) handleCancel(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 
 	task, ok := server.getTaskStatus(vars["taskID"])
@@ -96,7 +144,7 @@ func (server *taskRunnerServer) handleCancel(w http.ResponseWriter, r *http.Requ
 	task.cancel()
 }
 
-func (server *taskRunnerServer) handleTaskStatus(w http.ResponseWriter, r *http.Request) {
+func (server *TaskRunnerServer) handleTaskStatus(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 
 	task, ok := server.getTaskStatus(vars["taskID"])
@@ -124,7 +172,7 @@ func (server *taskRunnerServer) handleTaskStatus(w http.ResponseWriter, r *http.
 	}
 }
 
-func (server *taskRunnerServer) handleDelete(w http.ResponseWriter, r *http.Request) {
+func (server *TaskRunnerServer) handleDelete(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 
 	task, ok := server.getTaskStatus(vars["taskID"])
@@ -141,16 +189,21 @@ func (server *taskRunnerServer) handleDelete(w http.ResponseWriter, r *http.Requ
 	server.taskStatuses.Delete(vars["taskID"])
 }
 
-func (server *taskRunnerServer) newRouter() *mux.Router {
-	r := mux.NewRouter()
-	r.HandleFunc("/start", server.handleTaskStart).Methods("POST")
-	r.HandleFunc("/cancel/{taskID}", server.handleCancel).Methods("POST")
-	r.HandleFunc("/status/{taskID}", server.handleTaskStatus).Methods("GET")
-	r.HandleFunc("/delete/{taskID}", server.handleDelete).Methods("GET")
-	return r
+func (server *TaskRunnerServer) newTask(req *gojobcoordinatortest.TaskStartRequest) (Task, error) {
+	factory, ok := server.taskFactories.Load(req.ProcName)
+	if !ok {
+		return nil, fmt.Errorf("%sに対応するファクトリが存在しません", req.ProcName)
+	}
+
+	task, err := factory.(TaskFactoryFunc)(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return task, nil
 }
 
-func (server *taskRunnerServer) getTaskStatus(taskID string) (*taskStatus, bool) {
+func (server *TaskRunnerServer) getTaskStatus(taskID string) (*taskStatus, bool) {
 	value, ok := server.taskStatuses.Load(taskID)
 	if !ok {
 		return nil, false
@@ -162,23 +215,4 @@ func (server *taskRunnerServer) getTaskStatus(taskID string) (*taskStatus, bool)
 	}
 
 	return task, true
-}
-
-func (server *taskRunnerServer) run() {
-	for {
-		select {
-		case result := <-server.resultDone:
-			log.Printf("Complete Task. TaskID:%v Success:%v ReturnValues:%v\n", result.ID, result.Success, result.ResultValues)
-			task, ok := server.getTaskStatus(result.ID)
-			if ok {
-				task.result = result
-			} else {
-				log.Print("失敗")
-			}
-
-			server.activeTaskNumLock.Lock()
-			server.activeTaskNum--
-			server.activeTaskNumLock.Unlock()
-		}
-	}
 }

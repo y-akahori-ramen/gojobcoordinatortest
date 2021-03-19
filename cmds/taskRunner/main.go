@@ -9,13 +9,15 @@ import (
 
 func main() {
 	var addr = flag.String("addr", "localhost:8000", "サーバーアドレス")
-	var maxTaskNum = flag.Int("maxTaskNum", 2, "同時実行できる最大タスク数")
+	var maxTaskNum = flag.Uint("maxTaskNum", 2, "同時実行できる最大タスク数")
 	flag.Parse()
 
-	server := newTaskRunnerServer(*maxTaskNum)
-	router := server.newRouter()
+	server := NewTaskRunnerServer(*maxTaskNum)
+	server.AddFactory(ProcNameWait, newWaitTask)
+	server.AddFactory(ProcNameEcho, newEchoTask)
+	router := server.NewHTTPHandler()
 	go func() {
-		server.run()
+		server.Run()
 	}()
 
 	fmt.Printf("サーバー起動します addr:%v 同時タスク実行数最大:%v\n", *addr, *maxTaskNum)

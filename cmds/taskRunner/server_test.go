@@ -13,10 +13,17 @@ import (
 	"github.com/y-akahori-ramen/gojobcoordinatortest"
 )
 
+func newServer(taskMaxNum int32) *TaskRunnerServer {
+	server := NewTaskRunnerServer(2)
+	server.AddFactory(ProcNameWait, newWaitTask)
+	server.AddFactory(ProcNameEcho, newEchoTask)
+	return server
+}
+
 func TestStartEchoTask(t *testing.T) {
-	server := newTaskRunnerServer(2)
-	router := server.newRouter()
-	go server.run()
+	server := newServer(2)
+	router := server.NewHTTPHandler()
+	go server.Run()
 
 	params := map[string]interface{}{
 		"Value": "EchoValue",
@@ -36,9 +43,9 @@ func TestStartEchoTask(t *testing.T) {
 }
 
 func TestStartWaitTask(t *testing.T) {
-	server := newTaskRunnerServer(2)
-	router := server.newRouter()
-	go server.run()
+	server := newServer(2)
+	router := server.NewHTTPHandler()
+	go server.Run()
 
 	params := map[string]interface{}{
 		"Sec": 2.1,
@@ -74,9 +81,9 @@ func TestStartWaitTask(t *testing.T) {
 }
 
 func TestCancelTask(t *testing.T) {
-	server := newTaskRunnerServer(2)
-	router := server.newRouter()
-	go server.run()
+	server := newServer(2)
+	router := server.NewHTTPHandler()
+	go server.Run()
 
 	params := map[string]interface{}{
 		"Sec": 2.1,
@@ -126,9 +133,9 @@ func TestCancelTask(t *testing.T) {
 }
 
 func TestDeleteTask(t *testing.T) {
-	server := newTaskRunnerServer(2)
-	router := server.newRouter()
-	go server.run()
+	server := newServer(2)
+	router := server.NewHTTPHandler()
+	go server.Run()
 
 	params := map[string]interface{}{
 		"Sec": 3,
