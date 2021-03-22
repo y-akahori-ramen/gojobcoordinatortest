@@ -22,12 +22,12 @@ type taskEcho struct {
 	value string
 }
 
-func (task *taskEcho) Run(ctx context.Context, taskID string, done chan<- *TaskResult) {
+func (task *taskEcho) Run(ctx context.Context, taskID string, done chan<- *gojobcoordinatortest.TaskResult) {
 	log.Println("Echo:", task.value)
-	done <- &TaskResult{ID: taskID, Success: true}
+	done <- &gojobcoordinatortest.TaskResult{ID: taskID, Success: true}
 }
 
-func newEchoTask(req *gojobcoordinatortest.TaskStartRequest) (Task, error) {
+func newEchoTask(req *gojobcoordinatortest.TaskStartRequest) (gojobcoordinatortest.Task, error) {
 	if req.ProcName != ProcNameEcho {
 		return nil, fmt.Errorf("処理名 %s が不正です", req.ProcName)
 	}
@@ -55,7 +55,7 @@ type taskWait struct {
 	waitSec float64
 }
 
-func (task *taskWait) Run(ctx context.Context, taskID string, done chan<- *TaskResult) {
+func (task *taskWait) Run(ctx context.Context, taskID string, done chan<- *gojobcoordinatortest.TaskResult) {
 	duration := time.Duration(task.waitSec * (float64)(time.Second))
 	ticker := time.NewTicker(duration)
 	log.Printf("[taskWait][%v]%v待機します", taskID, duration.String())
@@ -64,16 +64,16 @@ func (task *taskWait) Run(ctx context.Context, taskID string, done chan<- *TaskR
 	select {
 	case <-ticker.C:
 		log.Printf("[taskWait][%v]待機が完了しました", taskID)
-		done <- &TaskResult{ID: taskID, Success: true}
+		done <- &gojobcoordinatortest.TaskResult{ID: taskID, Success: true}
 		return
 	case <-ctx.Done():
 		log.Printf("[taskWait][%v]キャンセルが発生しました", taskID)
-		done <- &TaskResult{ID: taskID, Success: false}
+		done <- &gojobcoordinatortest.TaskResult{ID: taskID, Success: false}
 		return
 	}
 }
 
-func newWaitTask(req *gojobcoordinatortest.TaskStartRequest) (Task, error) {
+func newWaitTask(req *gojobcoordinatortest.TaskStartRequest) (gojobcoordinatortest.Task, error) {
 	if req.ProcName != ProcNameWait {
 		return nil, fmt.Errorf("処理名 %s が不正です", req.ProcName)
 	}

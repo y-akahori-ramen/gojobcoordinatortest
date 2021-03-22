@@ -1,4 +1,4 @@
-package main
+package gojobcoordinatortest
 
 import (
 	"context"
@@ -10,7 +10,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
-	"github.com/y-akahori-ramen/gojobcoordinatortest"
 )
 
 // TaskRunnerServer タスク実行管理サーバー
@@ -76,7 +75,7 @@ func (server *TaskRunnerServer) Run() {
 type taskStatus struct {
 	result  *TaskResult
 	cancel  context.CancelFunc
-	reqData gojobcoordinatortest.TaskStartRequest
+	reqData TaskStartRequest
 }
 
 func (server *TaskRunnerServer) handleTaskStart(w http.ResponseWriter, r *http.Request) {
@@ -89,8 +88,8 @@ func (server *TaskRunnerServer) handleTaskStart(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	var requestData gojobcoordinatortest.TaskStartRequest
-	ok := gojobcoordinatortest.ReadJSONFromRequest(w, r, &requestData)
+	var requestData TaskStartRequest
+	ok := ReadJSONFromRequest(w, r, &requestData)
 	if !ok {
 		return
 	}
@@ -111,7 +110,7 @@ func (server *TaskRunnerServer) handleTaskStart(w http.ResponseWriter, r *http.R
 	taskID := id.String()
 
 	// タスクIDが確定するのでここでレスポンス作成　※タスク開始後にレスポンス作成失敗すると開始したタスクを止められないため
-	result := gojobcoordinatortest.TaskStartResponse{ID: taskID}
+	result := TaskStartResponse{ID: taskID}
 	err = json.NewEncoder(w).Encode(result)
 	if err != nil {
 		http.Error(w, fmt.Sprint("タスク作成に失敗しました:", err.Error()), http.StatusInternalServerError)
@@ -153,17 +152,17 @@ func (server *TaskRunnerServer) handleTaskStatus(w http.ResponseWriter, r *http.
 		return
 	}
 
-	var response gojobcoordinatortest.TaskStatusResponse
+	var response TaskStatusResponse
 	response.TaskStartRequest = task.reqData
 	if task.result != nil {
 		if task.result.Success {
-			response.Status = gojobcoordinatortest.StatusSuccess
+			response.Status = StatusSuccess
 		} else {
-			response.Status = gojobcoordinatortest.StatusFailure
+			response.Status = StatusFailure
 		}
 		response.ResultValues = task.result.ResultValues
 	} else {
-		response.Status = gojobcoordinatortest.StatusBusy
+		response.Status = StatusBusy
 	}
 
 	err := json.NewEncoder(w).Encode(response)
@@ -189,7 +188,7 @@ func (server *TaskRunnerServer) handleDelete(w http.ResponseWriter, r *http.Requ
 	server.taskStatuses.Delete(vars["taskID"])
 }
 
-func (server *TaskRunnerServer) newTask(req *gojobcoordinatortest.TaskStartRequest) (Task, error) {
+func (server *TaskRunnerServer) newTask(req *TaskStartRequest) (Task, error) {
 	factory, ok := server.taskFactories.Load(req.ProcName)
 	if !ok {
 		return nil, fmt.Errorf("%sに対応するファクトリが存在しません", req.ProcName)

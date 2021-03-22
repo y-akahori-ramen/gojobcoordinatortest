@@ -1,10 +1,6 @@
-package main
+package gojobcoordinatortest
 
-import (
-	"context"
-
-	"github.com/y-akahori-ramen/gojobcoordinatortest"
-)
+import "context"
 
 // TaskResult タスク処理結果
 type TaskResult struct {
@@ -19,4 +15,4 @@ type Task interface {
 }
 
 // TaskFactoryFunc タスク生成関数の型
-type TaskFactoryFunc func(req *gojobcoordinatortest.TaskStartRequest) (Task, error)
+type TaskFactoryFunc func(req *TaskStartRequest) (Task, error)

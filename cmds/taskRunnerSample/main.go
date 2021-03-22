@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+
+	"github.com/y-akahori-ramen/gojobcoordinatortest"
 )
 
 func main() {
@@ -12,7 +14,7 @@ func main() {
 	var maxTaskNum = flag.Uint("maxTaskNum", 2, "同時実行できる最大タスク数")
 	flag.Parse()
 
-	server := NewTaskRunnerServer(*maxTaskNum)
+	server := gojobcoordinatortest.NewTaskRunnerServer(*maxTaskNum)
 	server.AddFactory(ProcNameWait, newWaitTask)
 	server.AddFactory(ProcNameEcho, newEchoTask)
 	router := server.NewHTTPHandler()

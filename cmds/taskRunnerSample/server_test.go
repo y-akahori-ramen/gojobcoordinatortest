@@ -13,8 +13,8 @@ import (
 	"github.com/y-akahori-ramen/gojobcoordinatortest"
 )
 
-func newServer(taskMaxNum int32) *TaskRunnerServer {
-	server := NewTaskRunnerServer(2)
+func newServer(taskMaxNum int32) *gojobcoordinatortest.TaskRunnerServer {
+	server := gojobcoordinatortest.NewTaskRunnerServer(2)
 	server.AddFactory(ProcNameWait, newWaitTask)
 	server.AddFactory(ProcNameEcho, newEchoTask)
 	return server
