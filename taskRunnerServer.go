@@ -54,6 +54,11 @@ func (server *TaskRunnerServer) NewHTTPHandler() http.Handler {
 
 // Run サーバー起動
 func (server *TaskRunnerServer) Run() {
+	server.RunWithContext(context.Background())
+}
+
+// RunWithContext キャンセルコンテキスト指定ありのサーバー起動
+func (server *TaskRunnerServer) RunWithContext(ctx context.Context) {
 	for {
 		select {
 		case result := <-server.resultDone:
@@ -68,6 +73,9 @@ func (server *TaskRunnerServer) Run() {
 			server.activeTaskNumLock.Lock()
 			server.activeTaskNum--
 			server.activeTaskNumLock.Unlock()
+		case <-ctx.Done():
+			log.Print("サーバーを停止します")
+			return
 		}
 	}
 }
