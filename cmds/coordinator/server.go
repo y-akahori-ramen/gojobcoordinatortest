@@ -120,7 +120,6 @@ func (coordinator *coordinatorServer) newRouter() *mux.Router {
 
 	// 接続しているRunner取得
 	r.HandleFunc("/runners", func(rw http.ResponseWriter, r *http.Request) {
-		defer r.Body.Close()
 		responseData := gojobcoordinatortest.RunnerListResponse{Runners: coordinator.getRunnerAdds()}
 		err := json.NewEncoder(rw).Encode(responseData)
 		if err != nil {
