@@ -49,6 +49,7 @@ func (server *TaskRunnerServer) NewHTTPHandler() http.Handler {
 	r.HandleFunc("/cancel/{taskID}", server.handleCancel).Methods("POST")
 	r.HandleFunc("/status/{taskID}", server.handleTaskStatus).Methods("GET")
 	r.HandleFunc("/delete/{taskID}", server.handleDelete).Methods("GET")
+	r.HandleFunc("/alive", server.handleAlive).Methods("GET")
 	return r
 }
 
@@ -194,6 +195,10 @@ func (server *TaskRunnerServer) handleDelete(w http.ResponseWriter, r *http.Requ
 	}
 
 	server.taskStatuses.Delete(vars["taskID"])
+}
+
+func (server *TaskRunnerServer) handleAlive(w http.ResponseWriter, r *http.Request) {
+	return
 }
 
 func (server *TaskRunnerServer) newTask(req *TaskStartRequest) (Task, error) {
