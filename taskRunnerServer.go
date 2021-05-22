@@ -48,7 +48,7 @@ func (server *TaskRunnerServer) NewHTTPHandler() http.Handler {
 	r.HandleFunc("/start", server.handleTaskStart).Methods("POST")
 	r.HandleFunc("/cancel/{taskID}", server.handleCancel).Methods("POST")
 	r.HandleFunc("/status/{taskID}", server.handleTaskStatus).Methods("GET")
-	r.HandleFunc("/delete/{taskID}", server.handleDelete).Methods("GET")
+	r.HandleFunc("/delete/{taskID}", server.handleDelete).Methods("POST")
 	r.HandleFunc("/alive", server.handleAlive).Methods("GET")
 	r.HandleFunc("/tasks", server.handleTasks).Methods("GET")
 	return r
