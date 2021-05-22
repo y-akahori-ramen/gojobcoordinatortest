@@ -121,14 +121,7 @@ func (coordinator *coordinatorServer) newRouter() *mux.Router {
 	// 接続しているRunner取得
 	r.HandleFunc("/list", func(rw http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
-
-		var runners []string
-		addRunner := func(addr, _ interface{}) bool {
-			runners = append(runners, addr.(string))
-			return true
-		}
-		coordinator.runnerAddrs.Range(addRunner)
-		responseData := gojobcoordinatortest.RunnerListResponse{Runners: runners}
+		responseData := gojobcoordinatortest.RunnerListResponse{Runners: coordinator.getRunnerAdds()}
 		err := json.NewEncoder(rw).Encode(responseData)
 		if err != nil {
 			http.Error(rw, fmt.Sprint("レスポンス作成に失敗しました:", err.Error()), http.StatusInternalServerError)
@@ -243,4 +236,32 @@ func (coordinator *coordinatorServer) getJob(jobID string) (*job, error) {
 	}
 
 	return job, nil
+}
+
+// checkAliveTaskRunners 接続しているTaskRunnerが生存しているかを確認し、生存していなければ接続リストから削除する
+func (coordinator *coordinatorServer) removeDeadTaskRunners() {
+	var wg sync.WaitGroup
+	for _, runnerAddr := range coordinator.getRunnerAdds() {
+		wg.Add(1)
+		go func(addr string) {
+			defer wg.Done()
+			url := fmt.Sprint(addr, "/alive")
+			resp, err := http.Get(url)
+			if err != nil || resp.StatusCode != http.StatusOK {
+				log.Println("TaskRunnerが生存していません:", addr)
+				coordinator.disconnectRunner(addr)
+			}
+		}(runnerAddr)
+	}
+	wg.Wait()
+}
+
+func (coordinator *coordinatorServer) getRunnerAdds() []string {
+	var runners []string
+	addRunner := func(addr, _ interface{}) bool {
+		runners = append(runners, addr.(string))
+		return true
+	}
+	coordinator.runnerAddrs.Range(addRunner)
+	return runners
 }
