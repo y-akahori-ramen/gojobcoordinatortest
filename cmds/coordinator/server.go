@@ -119,7 +119,7 @@ func (coordinator *coordinatorServer) newRouter() *mux.Router {
 	}).Methods("POST")
 
 	// 接続しているRunner取得
-	r.HandleFunc("/list", func(rw http.ResponseWriter, r *http.Request) {
+	r.HandleFunc("/runners", func(rw http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
 		responseData := gojobcoordinatortest.RunnerListResponse{Runners: coordinator.getRunnerAdds()}
 		err := json.NewEncoder(rw).Encode(responseData)
