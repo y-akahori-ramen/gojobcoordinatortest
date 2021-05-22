@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/google/uuid"
@@ -139,14 +140,30 @@ func (coordinator *coordinatorServer) newRouter() *mux.Router {
 	return r
 }
 
-func (coordinator *coordinatorServer) startTask(req *gojobcoordinatortest.TaskStartRequest) (string, string, error) {
+func (coordinator *coordinatorServer) startTask(req *gojobcoordinatortest.TaskStartRequest, targets *[]string) (string, string, error) {
 	var returnAddr, returnID string
 	taskStarted := false
 
 	startFunc := func(addr, _ interface{}) bool {
-		id, err := requestStartTask(addr.(string), req)
+		addrStr := addr.(string)
+
+		// 対象の指定がある場合は有効な対象かをチェック。対象外であればタスク開始は行わない。
+		if targets != nil {
+			isValidTarget := false
+			for _, target := range *targets {
+				if strings.Contains(addrStr, target) {
+					isValidTarget = true
+					break
+				}
+			}
+			if !isValidTarget {
+				return true
+			}
+		}
+
+		id, err := requestStartTask(addrStr, req)
 		if err == nil {
-			returnAddr = addr.(string)
+			returnAddr = addrStr
 			returnID = id
 			taskStarted = true
 			return false

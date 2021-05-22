@@ -40,8 +40,11 @@ type TaskRunnerConnectionRequest struct {
 }
 
 // JobStartRequest コーディネーターサーバーに送るジョブ開始リクエスト
+// TargetFiltersの指定がある場合、指定されたフィルターリストのどれかに部分一致するタスクランナーが実行対象となる
+// 指定がない場合はコーディネーターに接続された全TaskRunnerを対象とする。
 type JobStartRequest struct {
-	Tasks []TaskStartRequest `json:"tasks"`
+	Tasks         []TaskStartRequest `json:"tasks"`
+	TargetFilters *[]string          `json:"targetFilters"`
 }
 
 // JobStartResponse コーディネーターサーバーへジョブ開始リクエストを行った時のレスポンス

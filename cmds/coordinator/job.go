@@ -35,7 +35,7 @@ func (j *job) Run(jobID string, coordinator *coordinatorServer, jobReq *gojobcoo
 	var wg sync.WaitGroup
 	for i := 0; i < len(jobReq.Tasks); i++ {
 		wg.Add(1)
-		go j.runTask(ctx, &wg, coordinator, &jobReq.Tasks[i])
+		go j.runTask(ctx, &wg, coordinator, &jobReq.Tasks[i], jobReq.TargetFilters)
 	}
 	wg.Wait()
 
@@ -43,7 +43,7 @@ func (j *job) Run(jobID string, coordinator *coordinatorServer, jobReq *gojobcoo
 	log.Printf("[%v]ジョブが完了しました", j.id)
 }
 
-func (j *job) runTask(ctx context.Context, wg *sync.WaitGroup, coordinator *coordinatorServer, taskReq *gojobcoordinatortest.TaskStartRequest) {
+func (j *job) runTask(ctx context.Context, wg *sync.WaitGroup, coordinator *coordinatorServer, taskReq *gojobcoordinatortest.TaskStartRequest, targets *[]string) {
 	defer wg.Done()
 
 	// タスク開始成功するまで繰り返す
@@ -53,7 +53,7 @@ func (j *job) runTask(ctx context.Context, wg *sync.WaitGroup, coordinator *coor
 		log.Printf("[%v]タスク開始を試みます\n", j.id)
 
 		var err error
-		runnerAddr, taskID, err = coordinator.startTask(taskReq)
+		runnerAddr, taskID, err = coordinator.startTask(taskReq, targets)
 		if err == nil {
 			j.taskInfosLock.Lock()
 			j.taskInfos = append(j.taskInfos, taskInfo{id: taskID, runnderAddr: runnerAddr})
