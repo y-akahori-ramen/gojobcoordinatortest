@@ -127,6 +127,15 @@ func (coordinator *coordinatorServer) newRouter() *mux.Router {
 		}
 	}).Methods("GET")
 
+	// ジョブ一覧取得
+	r.HandleFunc("/jobs", func(rw http.ResponseWriter, r *http.Request) {
+		responseData := gojobcoordinatortest.JobListResponse{Jobs: coordinator.getJobs()}
+		err := json.NewEncoder(rw).Encode(responseData)
+		if err != nil {
+			http.Error(rw, fmt.Sprint("レスポンス作成に失敗しました:", err.Error()), http.StatusInternalServerError)
+		}
+	}).Methods("GET")
+
 	return r
 }
 
@@ -263,4 +272,14 @@ func (coordinator *coordinatorServer) getRunnerAdds() []string {
 	}
 	coordinator.runnerAddrs.Range(addRunner)
 	return runners
+}
+
+func (coordinator *coordinatorServer) getJobs() []string {
+	var jobs []string
+	addJob := func(job, _ interface{}) bool {
+		jobs = append(jobs, job.(string))
+		return true
+	}
+	coordinator.jobs.Range(addJob)
+	return jobs
 }

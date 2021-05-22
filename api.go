@@ -29,6 +29,11 @@ const (
 	StatusBusy string = "StatusBusy"
 )
 
+// TaskListResponse TaskRunnerにタスク一覧取得を行った時のレスポンス
+type TaskListResponse struct {
+	Tasks []string `json:"tasks"`
+}
+
 // TaskRunnerConnectionRequest コーディネーターサーバーにTaskRunnerを接続・解除する際のリクエスト
 type TaskRunnerConnectionRequest struct {
 	Address string `json:"address"`
@@ -53,4 +58,9 @@ type JobStatusResponse struct {
 // RunnerListResponse コーディネーターサーバーへタスクランナーの一覧取得を行った時のレスポンス
 type RunnerListResponse struct {
 	Runners []string `json:"runners"`
+}
+
+// JobListResponse コーディネーターサーバーへジョブの一覧取得を行った時のレスポンス
+type JobListResponse struct {
+	Jobs []string `json:"jobs"`
 }

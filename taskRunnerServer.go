@@ -50,6 +50,7 @@ func (server *TaskRunnerServer) NewHTTPHandler() http.Handler {
 	r.HandleFunc("/status/{taskID}", server.handleTaskStatus).Methods("GET")
 	r.HandleFunc("/delete/{taskID}", server.handleDelete).Methods("GET")
 	r.HandleFunc("/alive", server.handleAlive).Methods("GET")
+	r.HandleFunc("/tasks", server.handleTasks).Methods("GET")
 	return r
 }
 
@@ -198,6 +199,23 @@ func (server *TaskRunnerServer) handleDelete(w http.ResponseWriter, r *http.Requ
 }
 
 func (server *TaskRunnerServer) handleAlive(w http.ResponseWriter, r *http.Request) {
+	return
+}
+
+func (server *TaskRunnerServer) handleTasks(w http.ResponseWriter, r *http.Request) {
+	var tasks []string
+	addTask := func(task, _ interface{}) bool {
+		tasks = append(tasks, task.(string))
+		return true
+	}
+	server.taskStatuses.Range(addTask)
+
+	response := TaskListResponse{Tasks: tasks}
+	err := json.NewEncoder(w).Encode(response)
+	if err != nil {
+		http.Error(w, fmt.Sprint("レスポンス作成に失敗しました:", err.Error()), http.StatusInternalServerError)
+	}
+
 	return
 }
 
