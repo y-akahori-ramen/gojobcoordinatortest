@@ -49,3 +49,8 @@ type JobStatusResponse struct {
 	Busy         bool                  `json:"busy"`
 	TaskStatuses *[]TaskStatusResponse `json:"taskStatuses"`
 }
+
+// RunnerListResponse コーディネーターサーバーへタスクランナーの一覧取得を行った時のレスポンス
+type RunnerListResponse struct {
+	Runners []string `json:"runners"`
+}
