@@ -160,7 +160,7 @@ func TestDeleteTask(t *testing.T) {
 	}
 
 	// タスク実行中のキャンセルは失敗する
-	req, err = http.NewRequest(http.MethodGet, fmt.Sprint("/delete/", result.ID), nil)
+	req, err = http.NewRequest(http.MethodPost, fmt.Sprint("/delete/", result.ID), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
