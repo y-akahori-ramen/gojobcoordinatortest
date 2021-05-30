@@ -1,6 +1,9 @@
 package gojobcoordinatortest
 
-import "context"
+import (
+	"context"
+	"log"
+)
 
 // TaskResult タスク処理結果
 type TaskResult struct {
@@ -11,7 +14,7 @@ type TaskResult struct {
 
 // Task タスクインターフェイス
 type Task interface {
-	Run(ctx context.Context, taskID string, done chan<- *TaskResult)
+	Run(ctx context.Context, taskID string, logger *log.Logger, done chan<- *TaskResult)
 }
 
 // TaskFactoryFunc タスク生成関数の型

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"sync"
@@ -22,12 +23,16 @@ type job struct {
 	cancelFunc    context.CancelFunc
 	busy          bool
 	id            string
+	logger        *log.Logger
 }
 
-func (j *job) Run(jobID string, coordinator *coordinatorServer, jobReq *gojobcoordinatortest.JobStartRequest) {
+func NewJob(jobID string, jobLogWriter io.Writer) *job {
+	return &job{id: jobID, logger: log.New(jobLogWriter, fmt.Sprintf("[%s]", jobID), log.Default().Flags())}
+}
+
+func (j *job) Run(coordinator *coordinatorServer, jobReq *gojobcoordinatortest.JobStartRequest) {
 	j.busy = true
-	j.id = jobID
-	log.Printf("[%v]ジョブを開始します", j.id)
+	j.logger.Print("Start Job.")
 
 	var ctx context.Context
 	ctx, j.cancelFunc = context.WithCancel(context.Background())
@@ -40,7 +45,7 @@ func (j *job) Run(jobID string, coordinator *coordinatorServer, jobReq *gojobcoo
 	wg.Wait()
 
 	j.busy = false
-	log.Printf("[%v]ジョブが完了しました", j.id)
+	j.logger.Print("Complete Job.")
 }
 
 func (j *job) runTask(ctx context.Context, wg *sync.WaitGroup, coordinator *coordinatorServer, taskReq *gojobcoordinatortest.TaskStartRequest, targets *[]string) {
@@ -50,7 +55,7 @@ func (j *job) runTask(ctx context.Context, wg *sync.WaitGroup, coordinator *coor
 	var runnerAddr, taskID string
 	ticker := time.NewTicker(time.Second * 30)
 	for {
-		log.Printf("[%v]タスク開始を試みます\n", j.id)
+		j.logger.Printf("タスク開始を試みます\n")
 
 		var err error
 		runnerAddr, taskID, err = coordinator.startTask(taskReq, targets)
@@ -58,7 +63,7 @@ func (j *job) runTask(ctx context.Context, wg *sync.WaitGroup, coordinator *coor
 			j.taskInfosLock.Lock()
 			j.taskInfos = append(j.taskInfos, taskInfo{id: taskID, runnderAddr: runnerAddr})
 			j.taskInfosLock.Unlock()
-			log.Printf("[%v]TaskRunner %v でタスクを開始しました %v\n", j.id, runnerAddr, taskID)
+			j.logger.Printf("TaskRunner %v でタスクを開始しました %v\n", runnerAddr, taskID)
 			break
 		}
 
@@ -74,12 +79,12 @@ func (j *job) runTask(ctx context.Context, wg *sync.WaitGroup, coordinator *coor
 	for {
 		status, err := getTaskStatus(runnerAddr, taskID)
 		if err != nil {
-			log.Println(err)
+			j.logger.Println(err)
 			return
 		}
 
 		if status.Status != gojobcoordinatortest.StatusBusy {
-			log.Printf("[%v]TaskRunner %v で開始したTaskID %v が完了しました。\n", j.id, runnerAddr, taskID)
+			j.logger.Printf("TaskRunner %v で開始したTaskID %v が完了しました。", runnerAddr, taskID)
 			return
 		}
 
@@ -89,11 +94,10 @@ func (j *job) runTask(ctx context.Context, wg *sync.WaitGroup, coordinator *coor
 			// キャンセル指示があればキャンセルリクエストを投げる
 			cancelRes, err := http.Post(fmt.Sprint(runnerAddr, "/cancel/", taskID), "", nil)
 			if err != nil || cancelRes.StatusCode != http.StatusOK {
-				log.Printf("[%v]TaskRunner %v で開始したTaskID %v へのキャンセルに失敗しました。", j.id, runnerAddr, taskID)
+				j.logger.Printf("TaskRunner %v で開始したTaskID %v へのキャンセルに失敗しました。", runnerAddr, taskID)
 				if err != nil {
-					log.Print(err)
+					j.logger.Print(err)
 				}
-				log.Print("\n")
 				return
 			}
 		}

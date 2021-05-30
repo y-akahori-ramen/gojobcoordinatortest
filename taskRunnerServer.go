@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"sync"
@@ -20,11 +21,21 @@ type TaskRunnerServer struct {
 	activeTaskNumLock sync.Mutex
 	activeTaskNum     uint
 	taskNumMax        uint
+	taskLogWriter     io.Writer
 }
 
 // NewTaskRunnerServer 指定した最大同時タスク実行数のTaskRunnerServerを作成する
 func NewTaskRunnerServer(taskNumMax uint) *TaskRunnerServer {
-	return &TaskRunnerServer{taskNumMax: taskNumMax, resultDone: make(chan *TaskResult)}
+	return &TaskRunnerServer{taskNumMax: taskNumMax, resultDone: make(chan *TaskResult), taskLogWriter: log.Default().Writer()}
+}
+
+// NewTaskRunnerServerNSQ NSQによるログ収集に対応したTaskRunnerServerを作成する
+func NewTaskRunnerServerNSQ(taskNumMax uint, nsqdUri string) (*TaskRunnerServer, error) {
+	nsqLogWriter, err := NewNSQWriter(nsqdUri, TaskTopicName, log.Default().Writer())
+	if err != nil {
+		return nil, err
+	}
+	return &TaskRunnerServer{taskNumMax: taskNumMax, resultDone: make(chan *TaskResult), taskLogWriter: nsqLogWriter}, nil
 }
 
 // AddFactory タスクファクトリーの登録
@@ -64,7 +75,7 @@ func (server *TaskRunnerServer) RunWithContext(ctx context.Context) {
 	for {
 		select {
 		case result := <-server.resultDone:
-			log.Printf("Complete Task. TaskID:%v Success:%v ReturnValues:%v\n", result.ID, result.Success, result.ResultValues)
+			server.newTaskLogger(result.ID).Printf("Complete Task. Success:%v ReturnValues:%v\n", result.Success, result.ResultValues)
 			task, ok := server.getTaskStatus(result.ID)
 			if ok {
 				task.result = result
@@ -137,8 +148,9 @@ func (server *TaskRunnerServer) handleTaskStart(w http.ResponseWriter, r *http.R
 	// タスク実行
 	// タスクが完了すればserver.resultDoneチャネルに結果が送られる
 	// タスクをキャンセルする場合はserver.taskStatusesに保存しているキャンセル関数を呼ぶ
-	go task.Run(ctx, taskID, server.resultDone)
-	log.Printf("Start Task.　TaskID:%v ProcName:%v Params:%v\n", taskID, requestData.ProcName, requestData.Params)
+	taskLogger := server.newTaskLogger(taskID)
+	taskLogger.Printf("Start Task. ProcName:%v Params:%v\n", requestData.ProcName, requestData.Params)
+	go task.Run(ctx, taskID, taskLogger, server.resultDone)
 }
 
 func (server *TaskRunnerServer) handleCancel(w http.ResponseWriter, r *http.Request) {
@@ -245,4 +257,8 @@ func (server *TaskRunnerServer) getTaskStatus(taskID string) (*taskStatus, bool)
 	}
 
 	return task, true
+}
+
+func (server *TaskRunnerServer) newTaskLogger(taskID string) *log.Logger {
+	return log.New(server.taskLogWriter, fmt.Sprintf("[%s]", taskID), log.Default().Flags())
 }
