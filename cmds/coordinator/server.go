@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -20,7 +19,7 @@ import (
 type coordinatorServer struct {
 	jobs        sync.Map
 	runnerAddrs sync.Map
-	jobWriter   io.Writer
+	logHandler  gojobcoordinatortest.LogHandler
 }
 
 func (coordinator *coordinatorServer) newRouter() *mux.Router {
@@ -246,7 +245,9 @@ func (coordinator *coordinatorServer) newJob() (string, error) {
 		return "", errors.New("ID重複")
 	}
 
-	coordinator.jobs.Store(id.String(), NewJob(id.String(), coordinator.jobWriter))
+	writer := &gojobcoordinatortest.WriterWithHandler{Writer: log.Default().Writer(), Handler: coordinator.logHandler, Id: id.String()}
+	logger := log.New(writer, fmt.Sprintf("[%s]", id.String()), log.Default().Flags())
+	coordinator.jobs.Store(id.String(), NewJob(id.String(), *logger))
 
 	return id.String(), nil
 }

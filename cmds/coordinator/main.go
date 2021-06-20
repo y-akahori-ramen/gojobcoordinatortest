@@ -3,31 +3,16 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"time"
-
-	"github.com/y-akahori-ramen/gojobcoordinatortest"
 )
 
 func main() {
 	var addr = flag.String("addr", "localhost:8080", "サーバーアドレス")
-	var nsqdUri = flag.String("nsqdUri", "", "NSQにジョブのログを送る場合NSQDのアドレス")
 	flag.Parse()
 
-	var jobWriter io.Writer
-	if *nsqdUri != "" {
-		var err error
-		jobWriter, err = gojobcoordinatortest.NewNSQWriter(*nsqdUri, gojobcoordinatortest.JobTopicName, log.Default().Writer())
-		if err != nil {
-			log.Fatal(err)
-		}
-	} else {
-		jobWriter = log.Default().Writer()
-	}
-
-	server := coordinatorServer{jobWriter: jobWriter}
+	server := coordinatorServer{}
 	router := server.newRouter()
 
 	fmt.Println("サーバー起動します:", *addr)

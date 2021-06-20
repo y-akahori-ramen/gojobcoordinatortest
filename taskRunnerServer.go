@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"sync"
@@ -21,21 +20,12 @@ type TaskRunnerServer struct {
 	activeTaskNumLock sync.Mutex
 	activeTaskNum     uint
 	taskNumMax        uint
-	taskLogWriter     io.Writer
+	logHandler        LogHandler
 }
 
 // NewTaskRunnerServer 指定した最大同時タスク実行数のTaskRunnerServerを作成する
-func NewTaskRunnerServer(taskNumMax uint) *TaskRunnerServer {
-	return &TaskRunnerServer{taskNumMax: taskNumMax, resultDone: make(chan *TaskResult), taskLogWriter: log.Default().Writer()}
-}
-
-// NewTaskRunnerServerNSQ NSQによるログ収集に対応したTaskRunnerServerを作成する
-func NewTaskRunnerServerNSQ(taskNumMax uint, nsqdUri string) (*TaskRunnerServer, error) {
-	nsqLogWriter, err := NewNSQWriter(nsqdUri, TaskTopicName, log.Default().Writer())
-	if err != nil {
-		return nil, err
-	}
-	return &TaskRunnerServer{taskNumMax: taskNumMax, resultDone: make(chan *TaskResult), taskLogWriter: nsqLogWriter}, nil
+func NewTaskRunnerServer(taskNumMax uint, logHandler LogHandler) *TaskRunnerServer {
+	return &TaskRunnerServer{taskNumMax: taskNumMax, resultDone: make(chan *TaskResult), logHandler: logHandler}
 }
 
 // AddFactory タスクファクトリーの登録
@@ -260,5 +250,6 @@ func (server *TaskRunnerServer) getTaskStatus(taskID string) (*taskStatus, bool)
 }
 
 func (server *TaskRunnerServer) newTaskLogger(taskID string) *log.Logger {
-	return log.New(server.taskLogWriter, fmt.Sprintf("[%s]", taskID), log.Default().Flags())
+	writer := &WriterWithHandler{Writer: log.Default().Writer(), Handler: server.logHandler, Id: taskID}
+	return log.New(writer, fmt.Sprintf("[%s]", taskID), log.Default().Flags())
 }

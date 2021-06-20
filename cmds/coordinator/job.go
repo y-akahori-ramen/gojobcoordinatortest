@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"sync"
@@ -23,11 +22,11 @@ type job struct {
 	cancelFunc    context.CancelFunc
 	busy          bool
 	id            string
-	logger        *log.Logger
+	logger        log.Logger
 }
 
-func NewJob(jobID string, jobLogWriter io.Writer) *job {
-	return &job{id: jobID, logger: log.New(jobLogWriter, fmt.Sprintf("[%s]", jobID), log.Default().Flags())}
+func NewJob(jobID string, logger log.Logger) *job {
+	return &job{id: jobID, logger: logger}
 }
 
 func (j *job) Run(coordinator *coordinatorServer, jobReq *gojobcoordinatortest.JobStartRequest) {

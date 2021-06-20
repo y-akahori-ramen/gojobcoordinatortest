@@ -13,8 +13,15 @@ import (
 	"github.com/y-akahori-ramen/gojobcoordinatortest"
 )
 
+type testLogHandler struct {
+}
+
+func (handler *testLogHandler) HandleLog(id string, p []byte) {
+	fmt.Printf("Handle Log: ID:%s Log:%s", id, p)
+}
+
 func newServer(taskMaxNum int32) *gojobcoordinatortest.TaskRunnerServer {
-	server := gojobcoordinatortest.NewTaskRunnerServer(2)
+	server := gojobcoordinatortest.NewTaskRunnerServer(2, &testLogHandler{})
 	server.AddFactory(ProcNameWait, newWaitTask)
 	server.AddFactory(ProcNameEcho, newEchoTask)
 	return server
