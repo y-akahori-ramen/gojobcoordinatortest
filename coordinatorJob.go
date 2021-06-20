@@ -1,4 +1,4 @@
-package main
+package gojobcoordinatortest
 
 import (
 	"context"
@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"sync"
 	"time"
-
-	"github.com/y-akahori-ramen/gojobcoordinatortest"
 )
 
 type taskInfo struct {
@@ -16,7 +14,7 @@ type taskInfo struct {
 	runnderAddr string
 }
 
-type job struct {
+type coordinatorJob struct {
 	taskInfos     []taskInfo
 	taskInfosLock sync.Mutex
 	cancelFunc    context.CancelFunc
@@ -25,11 +23,11 @@ type job struct {
 	logger        log.Logger
 }
 
-func NewJob(jobID string, logger log.Logger) *job {
-	return &job{id: jobID, logger: logger}
+func newCoordinatorJob(jobID string, logger log.Logger) *coordinatorJob {
+	return &coordinatorJob{id: jobID, logger: logger}
 }
 
-func (j *job) Run(coordinator *coordinatorServer, jobReq *gojobcoordinatortest.JobStartRequest) {
+func (j *coordinatorJob) run(cod *Coordinator, jobReq *JobStartRequest) {
 	j.busy = true
 	j.logger.Print("Start Job.")
 
@@ -39,7 +37,7 @@ func (j *job) Run(coordinator *coordinatorServer, jobReq *gojobcoordinatortest.J
 	var wg sync.WaitGroup
 	for i := 0; i < len(jobReq.Tasks); i++ {
 		wg.Add(1)
-		go j.runTask(ctx, &wg, coordinator, &jobReq.Tasks[i], jobReq.TargetFilters)
+		go j.runTask(ctx, &wg, cod, &jobReq.Tasks[i], jobReq.TargetFilters)
 	}
 	wg.Wait()
 
@@ -47,7 +45,7 @@ func (j *job) Run(coordinator *coordinatorServer, jobReq *gojobcoordinatortest.J
 	j.logger.Print("Complete Job.")
 }
 
-func (j *job) runTask(ctx context.Context, wg *sync.WaitGroup, coordinator *coordinatorServer, taskReq *gojobcoordinatortest.TaskStartRequest, targets *[]string) {
+func (j *coordinatorJob) runTask(ctx context.Context, wg *sync.WaitGroup, cod *Coordinator, taskReq *TaskStartRequest, targets *[]string) {
 	defer wg.Done()
 
 	// タスク開始成功するまで繰り返す
@@ -57,7 +55,7 @@ func (j *job) runTask(ctx context.Context, wg *sync.WaitGroup, coordinator *coor
 		j.logger.Printf("タスク開始を試みます\n")
 
 		var err error
-		runnerAddr, taskID, err = coordinator.startTask(taskReq, targets)
+		runnerAddr, taskID, err = cod.startTask(taskReq, targets)
 		if err == nil {
 			j.taskInfosLock.Lock()
 			j.taskInfos = append(j.taskInfos, taskInfo{id: taskID, runnderAddr: runnerAddr})
@@ -82,7 +80,7 @@ func (j *job) runTask(ctx context.Context, wg *sync.WaitGroup, coordinator *coor
 			return
 		}
 
-		if status.Status != gojobcoordinatortest.StatusBusy {
+		if status.Status != StatusBusy {
 			j.logger.Printf("TaskRunner %v で開始したTaskID %v が完了しました。", runnerAddr, taskID)
 			return
 		}
@@ -103,8 +101,8 @@ func (j *job) runTask(ctx context.Context, wg *sync.WaitGroup, coordinator *coor
 	}
 }
 
-func getTaskStatus(runnerAddr, taskID string) (gojobcoordinatortest.TaskStatusResponse, error) {
-	var result gojobcoordinatortest.TaskStatusResponse
+func getTaskStatus(runnerAddr, taskID string) (TaskStatusResponse, error) {
+	var result TaskStatusResponse
 
 	statusURL := fmt.Sprint(runnerAddr, "/status/", taskID)
 	res, err := http.Get(statusURL)
@@ -116,7 +114,7 @@ func getTaskStatus(runnerAddr, taskID string) (gojobcoordinatortest.TaskStatusRe
 		return result, fmt.Errorf("TaskRunner %v で開始したTaskID %v のステータス取得でエラーが発生しました。 %v", runnerAddr, taskID, err)
 	}
 
-	err = gojobcoordinatortest.ReadJSONFromResponse(res, &result)
+	err = ReadJSONFromResponse(res, &result)
 	res.Body.Close()
 	if err != nil {
 		return result, fmt.Errorf("TaskRunner %v で開始したTaskID %v のステータス解析でエラーが発生しました。 %v", runnerAddr, taskID, err)
@@ -125,22 +123,22 @@ func getTaskStatus(runnerAddr, taskID string) (gojobcoordinatortest.TaskStatusRe
 	return result, nil
 }
 
-func (j *job) Cancel() {
+func (j *coordinatorJob) cancel() {
 	if j.cancelFunc != nil {
 		j.cancelFunc()
 		log.Printf("[%v]ジョブのキャンセルリクエストを行ました", j.id)
 	}
 }
 
-func (j *job) GetStatus() gojobcoordinatortest.JobStatusResponse {
+func (j *coordinatorJob) getStatus() JobStatusResponse {
 	j.taskInfosLock.Lock()
 	taskInfosCopy := make([]taskInfo, len(j.taskInfos))
 	copy(taskInfosCopy, j.taskInfos)
 	j.taskInfosLock.Unlock()
 
-	response := gojobcoordinatortest.JobStatusResponse{}
+	response := JobStatusResponse{}
 
-	var statuses []gojobcoordinatortest.TaskStatusResponse
+	var statuses []TaskStatusResponse
 
 	for _, taskInfo := range taskInfosCopy {
 		status, err := getTaskStatus(taskInfo.runnderAddr, taskInfo.id)

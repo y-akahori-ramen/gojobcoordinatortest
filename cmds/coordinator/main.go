@@ -1,29 +1,26 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
-	"time"
+
+	"github.com/y-akahori-ramen/gojobcoordinatortest"
 )
 
 func main() {
 	var addr = flag.String("addr", "localhost:8080", "サーバーアドレス")
 	flag.Parse()
 
-	server := coordinatorServer{}
-	router := server.newRouter()
-
+	cod := gojobcoordinatortest.NewCoordinator(gojobcoordinatortest.CoordinatorConfig{})
+	server := gojobcoordinatortest.NewCoordinatorServer(cod)
 	fmt.Println("サーバー起動します:", *addr)
 
-	// 一定間隔で接続しているTaskRunnerの生存を確認する
 	go func() {
-		ticker := time.NewTicker(time.Second * 30)
-		for range ticker.C {
-			server.removeDeadTaskRunners()
-		}
+		server.Run(context.Background())
 	}()
 
-	log.Fatal(http.ListenAndServe(*addr, router))
+	log.Fatal(http.ListenAndServe(*addr, server.NewHTTPHandler()))
 }
