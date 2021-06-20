@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -21,16 +22,18 @@ func (handler *testLogHandler) HandleLog(id string, p []byte) {
 }
 
 func newServer(taskMaxNum int32) *gojobcoordinatortest.TaskRunnerServer {
-	server := gojobcoordinatortest.NewTaskRunnerServer(2, &testLogHandler{})
-	server.AddFactory(ProcNameWait, newWaitTask)
-	server.AddFactory(ProcNameEcho, newEchoTask)
+	runner := gojobcoordinatortest.NewTaskRunner(gojobcoordinatortest.TaskRunnerConfig{TaskNumMax: 2, Handler: &testLogHandler{}})
+	runner.AddFactory(ProcNameWait, newWaitTask)
+	runner.AddFactory(ProcNameEcho, newEchoTask)
+
+	server := gojobcoordinatortest.NewTaskRunnerServer(runner)
 	return server
 }
 
 func TestStartEchoTask(t *testing.T) {
 	server := newServer(2)
 	router := server.NewHTTPHandler()
-	go server.Run()
+	go server.Run(context.Background())
 
 	params := map[string]interface{}{
 		"Value": "EchoValue",
@@ -52,7 +55,7 @@ func TestStartEchoTask(t *testing.T) {
 func TestStartWaitTask(t *testing.T) {
 	server := newServer(2)
 	router := server.NewHTTPHandler()
-	go server.Run()
+	go server.Run(context.Background())
 
 	params := map[string]interface{}{
 		"Sec": 2.1,
@@ -90,7 +93,7 @@ func TestStartWaitTask(t *testing.T) {
 func TestCancelTask(t *testing.T) {
 	server := newServer(2)
 	router := server.NewHTTPHandler()
-	go server.Run()
+	go server.Run(context.Background())
 
 	params := map[string]interface{}{
 		"Sec": 2.1,
@@ -142,7 +145,7 @@ func TestCancelTask(t *testing.T) {
 func TestDeleteTask(t *testing.T) {
 	server := newServer(2)
 	router := server.NewHTTPHandler()
-	go server.Run()
+	go server.Run(context.Background())
 
 	params := map[string]interface{}{
 		"Sec": 3,

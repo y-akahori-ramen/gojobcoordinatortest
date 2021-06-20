@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -14,13 +15,14 @@ func main() {
 	var maxTaskNum = flag.Uint("maxTaskNum", 2, "同時実行できる最大タスク数")
 	flag.Parse()
 
-	var server *gojobcoordinatortest.TaskRunnerServer
-	server = gojobcoordinatortest.NewTaskRunnerServer(*maxTaskNum, nil)
-	server.AddFactory(ProcNameWait, newWaitTask)
-	server.AddFactory(ProcNameEcho, newEchoTask)
+	runner := gojobcoordinatortest.NewTaskRunner(gojobcoordinatortest.TaskRunnerConfig{TaskNumMax: *maxTaskNum})
+	runner.AddFactory(ProcNameWait, newWaitTask)
+	runner.AddFactory(ProcNameEcho, newEchoTask)
+
+	server := gojobcoordinatortest.NewTaskRunnerServer(runner)
 	router := server.NewHTTPHandler()
 	go func() {
-		server.Run()
+		server.Run(context.Background())
 	}()
 
 	fmt.Printf("サーバー起動します addr:%v 同時タスク実行数最大:%v\n", *addr, *maxTaskNum)

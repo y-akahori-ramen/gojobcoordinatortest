@@ -4,43 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
-	"sync"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 )
 
-// TaskRunnerServer タスク実行管理サーバー
+// TaskRunnerServer TaskRunnerにサーバー機能を持たせたもの
 type TaskRunnerServer struct {
-	resultDone        chan *TaskResult
-	taskStatuses      sync.Map
-	taskFactories     sync.Map
-	activeTaskNumLock sync.Mutex
-	activeTaskNum     uint
-	taskNumMax        uint
-	logHandler        LogHandler
+	runner *TaskRunner
 }
 
-// NewTaskRunnerServer 指定した最大同時タスク実行数のTaskRunnerServerを作成する
-func NewTaskRunnerServer(taskNumMax uint, logHandler LogHandler) *TaskRunnerServer {
-	return &TaskRunnerServer{taskNumMax: taskNumMax, resultDone: make(chan *TaskResult), logHandler: logHandler}
-}
-
-// AddFactory タスクファクトリーの登録
-func (server *TaskRunnerServer) AddFactory(procName string, f TaskFactoryFunc) error {
-	_, exist := server.taskFactories.Load(procName)
-	if exist {
-		return fmt.Errorf("%sに対応するファクトリはすでに登録されています", procName)
-	}
-
-	if f == nil {
-		return fmt.Errorf("%sに登録されるファクトリがnilです", procName)
-	}
-
-	server.taskFactories.Store(procName, f)
-	return nil
+// NewTaskRunnerServer 指定したTaskRunnerのサーバーを作成する
+func NewTaskRunnerServer(runner *TaskRunner) *TaskRunnerServer {
+	return &TaskRunnerServer{runner: runner}
 }
 
 // NewHTTPHandler HTTPHandlerの作成
@@ -56,128 +32,50 @@ func (server *TaskRunnerServer) NewHTTPHandler() http.Handler {
 }
 
 // Run サーバー起動
-func (server *TaskRunnerServer) Run() {
-	server.RunWithContext(context.Background())
-}
-
-// RunWithContext キャンセルコンテキスト指定ありのサーバー起動
-func (server *TaskRunnerServer) RunWithContext(ctx context.Context) {
-	for {
-		select {
-		case result := <-server.resultDone:
-			server.newTaskLogger(result.ID).Printf("Complete Task. Success:%v ReturnValues:%v\n", result.Success, result.ResultValues)
-			task, ok := server.getTaskStatus(result.ID)
-			if ok {
-				task.result = result
-			} else {
-				log.Print("失敗")
-			}
-
-			server.activeTaskNumLock.Lock()
-			server.activeTaskNum--
-			server.activeTaskNumLock.Unlock()
-		case <-ctx.Done():
-			log.Print("サーバーを停止します")
-			return
-		}
-	}
-}
-
-type taskStatus struct {
-	result  *TaskResult
-	cancel  context.CancelFunc
-	reqData TaskStartRequest
+func (server *TaskRunnerServer) Run(ctx context.Context) {
+	server.runner.Run(ctx)
 }
 
 func (server *TaskRunnerServer) handleTaskStart(w http.ResponseWriter, r *http.Request) {
 
-	server.activeTaskNumLock.Lock()
-	defer server.activeTaskNumLock.Unlock()
-
-	if server.activeTaskNum >= server.taskNumMax {
-		http.Error(w, "タスク実行数制限にひっかかりました", http.StatusInternalServerError)
-		return
-	}
-
 	var requestData TaskStartRequest
 	ok := ReadJSONFromRequest(w, r, &requestData)
 	if !ok {
+		http.Error(w, "JSONパースに失敗しました", http.StatusBadRequest)
 		return
 	}
 
-	// タスク作成
-	task, err := server.newTask(&requestData)
+	response, err := server.runner.Start(requestData)
 	if err != nil {
-		http.Error(w, fmt.Sprint("タスク作成に失敗しました:", err.Error()), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
-	// タスクID割り振り
-	id, err := uuid.NewRandom()
-	if err != nil {
-		http.Error(w, fmt.Sprint("ID生成に失敗しました:", err.Error()), http.StatusInternalServerError)
-		return
-	}
-	taskID := id.String()
 
 	// タスクIDが確定するのでここでレスポンス作成　※タスク開始後にレスポンス作成失敗すると開始したタスクを止められないため
-	result := TaskStartResponse{ID: taskID}
-	err = json.NewEncoder(w).Encode(result)
+	err = json.NewEncoder(w).Encode(response)
 	if err != nil {
-		http.Error(w, fmt.Sprint("タスク作成に失敗しました:", err.Error()), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprint("JSONエンコードに失敗しました:", err.Error()), http.StatusInternalServerError)
 		return
 	}
-
-	// タスク状態管理情報の作成
-	ctx, cancel := context.WithCancel(context.Background())
-	server.taskStatuses.Store(taskID, &taskStatus{reqData: requestData, result: nil, cancel: cancel})
-
-	// タスク実行数を加算
-	server.activeTaskNum++
-
-	// タスク実行
-	// タスクが完了すればserver.resultDoneチャネルに結果が送られる
-	// タスクをキャンセルする場合はserver.taskStatusesに保存しているキャンセル関数を呼ぶ
-	taskLogger := server.newTaskLogger(taskID)
-	taskLogger.Printf("Start Task. ProcName:%v Params:%v\n", requestData.ProcName, requestData.Params)
-	go task.Run(ctx, taskID, taskLogger, server.resultDone)
 }
 
 func (server *TaskRunnerServer) handleCancel(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-
-	task, ok := server.getTaskStatus(vars["taskID"])
-	if !ok {
-		http.Error(w, fmt.Sprint("タスク取得に失敗:", vars["taskID"]), http.StatusNotFound)
-		return
+	if err := server.runner.CancelReq(vars["taskID"]); err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
 	}
-
-	task.cancel()
 }
 
 func (server *TaskRunnerServer) handleTaskStatus(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 
-	task, ok := server.getTaskStatus(vars["taskID"])
-	if !ok {
-		http.Error(w, fmt.Sprint("タスク取得に失敗:", vars["taskID"]), http.StatusNotFound)
+	statusResponse, err := server.runner.GetTaskStatusResponse(vars["taskID"])
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
 
-	var response TaskStatusResponse
-	response.TaskStartRequest = task.reqData
-	if task.result != nil {
-		if task.result.Success {
-			response.Status = StatusSuccess
-		} else {
-			response.Status = StatusFailure
-		}
-		response.ResultValues = task.result.ResultValues
-	} else {
-		response.Status = StatusBusy
-	}
-
-	err := json.NewEncoder(w).Encode(response)
+	err = json.NewEncoder(w).Encode(statusResponse)
 	if err != nil {
 		http.Error(w, fmt.Sprint("レスポンス作成に失敗しました:", err.Error()), http.StatusInternalServerError)
 	}
@@ -186,18 +84,12 @@ func (server *TaskRunnerServer) handleTaskStatus(w http.ResponseWriter, r *http.
 func (server *TaskRunnerServer) handleDelete(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 
-	task, ok := server.getTaskStatus(vars["taskID"])
-	if !ok {
-		http.Error(w, fmt.Sprint("タスク取得に失敗:", vars["taskID"]), http.StatusNotFound)
+	err := server.runner.Delete(vars["taskID"])
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	if task.result == nil {
-		http.Error(w, "実行中タスクは削除できません", http.StatusInternalServerError)
-		return
-	}
-
-	server.taskStatuses.Delete(vars["taskID"])
 }
 
 func (server *TaskRunnerServer) handleAlive(w http.ResponseWriter, r *http.Request) {
@@ -205,51 +97,14 @@ func (server *TaskRunnerServer) handleAlive(w http.ResponseWriter, r *http.Reque
 }
 
 func (server *TaskRunnerServer) handleTasks(w http.ResponseWriter, r *http.Request) {
-	var tasks []string
-	addTask := func(task, _ interface{}) bool {
-		tasks = append(tasks, task.(string))
-		return true
-	}
-	server.taskStatuses.Range(addTask)
 
-	response := TaskListResponse{Tasks: tasks}
+	taskIDs := server.runner.GetTaskIDs()
+
+	response := TaskListResponse{Tasks: taskIDs}
 	err := json.NewEncoder(w).Encode(response)
 	if err != nil {
 		http.Error(w, fmt.Sprint("レスポンス作成に失敗しました:", err.Error()), http.StatusInternalServerError)
 	}
 
 	return
-}
-
-func (server *TaskRunnerServer) newTask(req *TaskStartRequest) (Task, error) {
-	factory, ok := server.taskFactories.Load(req.ProcName)
-	if !ok {
-		return nil, fmt.Errorf("%sに対応するファクトリが存在しません", req.ProcName)
-	}
-
-	task, err := factory.(TaskFactoryFunc)(req)
-	if err != nil {
-		return nil, err
-	}
-
-	return task, nil
-}
-
-func (server *TaskRunnerServer) getTaskStatus(taskID string) (*taskStatus, bool) {
-	value, ok := server.taskStatuses.Load(taskID)
-	if !ok {
-		return nil, false
-	}
-
-	task, ok := value.(*taskStatus)
-	if !ok {
-		return nil, false
-	}
-
-	return task, true
-}
-
-func (server *TaskRunnerServer) newTaskLogger(taskID string) *log.Logger {
-	writer := &WriterWithHandler{Writer: log.Default().Writer(), Handler: server.logHandler, Id: taskID}
-	return log.New(writer, fmt.Sprintf("[%s]", taskID), log.Default().Flags())
 }
