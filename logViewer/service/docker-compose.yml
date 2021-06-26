@@ -1,0 +1,31 @@
+version: '3'
+services:
+  fluentd:
+    build: ./fluentdImage
+    ports:
+      - "24224:24224"
+      - "24224:24224/udp"
+    volumes: 
+      - ./fluentd/conf:/fluentd/etc
+  mongo:
+    image: mongo:4.4.6
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+      MONGO_INITDB_DATABASE: logViewer    # /docker-entrypoint-initdb.d/ないのjsの実行対象のDB名指定
+    ports:
+      - 27017:27017
+    volumes:
+      - ./mongoDB/db:/data/db
+      - ./mongoDB/init:/docker-entrypoint-initdb.d
+  mongo-express:
+    image: mongo-express:0.54
+    restart: always
+    ports:
+      - 8081:8081
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: root
+      ME_CONFIG_MONGODB_ADMINPASSWORD: example
+      ME_CONFIG_BASICAUTH_USERNAME: sampleUser
+      ME_CONFIG_BASICAUTH_PASSWORD: sampleUser
