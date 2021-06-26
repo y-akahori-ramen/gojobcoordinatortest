@@ -9,4 +9,5 @@ require (
 	github.com/gorilla/mux v1.8.0
 	github.com/kr/pretty v0.2.1 // indirect
 	github.com/tinylib/msgp v1.1.6 // indirect
+	go.mongodb.org/mongo-driver v1.5.3
 )
