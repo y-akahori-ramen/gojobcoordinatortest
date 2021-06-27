@@ -11,8 +11,20 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
-// LogData 保存されたログ情報へのアクセサ
-type LogData struct {
+// LogData 保存されたログへのアクセスインターフェイス
+type LogData interface {
+	// GetTaskLog 指定したタスクIDのログを時間の昇順で取得します
+	GetTaskLog(taskID string) ([]string, error)
+	// GetJobLog 指定したジョブIDのログを時間の昇順で取得します
+	GetJobLog(jobID string) ([]string, error)
+	// GetTaskList タスクID一覧を取得します
+	GetTaskList() ([]string, error)
+	// GetJobList ジョブID一覧を取得します
+	GetJobList() ([]string, error)
+}
+
+// MongoLogData MongoDBに保存されたログ情報へのアクセサ
+type MongoLogData struct {
 	client   *mongo.Client
 	taskLogs *mongo.Collection
 	taskList *mongo.Collection
@@ -21,7 +33,7 @@ type LogData struct {
 }
 
 // Close 接続したDBから切断します
-func (data *LogData) Close() {
+func (data *MongoLogData) Close() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := data.client.Disconnect(ctx); err != nil {
@@ -29,11 +41,11 @@ func (data *LogData) Close() {
 	}
 }
 
-// NewLogData LogDataの作成
+// NewMongoLogData LogDataの作成
 // dbUri はログが保存されているデータベースを指定する。
 // localhostのポート27017でアクセスできるmongodbに保存しているのであれば以下のようになる
 // mongodb://localhost:27017
-func NewLogData(dbUri string) (*LogData, error) {
+func NewMongoLogData(dbUri string) (*MongoLogData, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -41,16 +53,16 @@ func NewLogData(dbUri string) (*LogData, error) {
 	// logViewerデータベースに情報を保存しているためuriにアクセス先を加える
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(dbUri+"/logViewer"))
 	if err != nil {
-		return &LogData{}, err
+		return &MongoLogData{}, err
 	}
 
 	if err := client.Ping(ctx, readpref.Primary()); err != nil {
-		return &LogData{}, err
+		return &MongoLogData{}, err
 	}
 
 	database := client.Database("logViewer")
 
-	return &LogData{
+	return &MongoLogData{
 			client:   client,
 			taskLogs: database.Collection("task"),
 			taskList: database.Collection("taskStart"),
@@ -60,22 +72,22 @@ func NewLogData(dbUri string) (*LogData, error) {
 }
 
 // GetTaskLog 指定したタスクIDのログを時間の昇順で取得します
-func (data *LogData) GetTaskLog(taskID string) ([]string, error) {
+func (data *MongoLogData) GetTaskLog(taskID string) ([]string, error) {
 	return getLog(data.taskLogs, taskID)
 }
 
-// GetTaskLog 指定したジョブIDのログを時間の昇順で取得します
-func (data *LogData) GetJobLog(jobID string) ([]string, error) {
+// GetJobLog 指定したジョブIDのログを時間の昇順で取得します
+func (data *MongoLogData) GetJobLog(jobID string) ([]string, error) {
 	return getLog(data.jobLogs, jobID)
 }
 
 // GetTaskList タスクID一覧を取得します
-func (data *LogData) GetTaskList() ([]string, error) {
+func (data *MongoLogData) GetTaskList() ([]string, error) {
 	return getList(data.taskList)
 }
 
 // GetJobList ジョブID一覧を取得します
-func (data *LogData) GetJobList() ([]string, error) {
+func (data *MongoLogData) GetJobList() ([]string, error) {
 	return getList(data.jobList)
 }
 
