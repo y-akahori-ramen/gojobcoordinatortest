@@ -14,9 +14,9 @@ import (
 // LogData 保存されたログへのアクセスインターフェイス
 type LogData interface {
 	// GetTaskLog 指定したタスクIDのログを時間の昇順で取得します
-	GetTaskLog(taskID string) ([]string, error)
+	GetTaskLog(taskID string) (string, error)
 	// GetJobLog 指定したジョブIDのログを時間の昇順で取得します
-	GetJobLog(jobID string) ([]string, error)
+	GetJobLog(jobID string) (string, error)
 	// GetTaskList タスクID一覧を取得します
 	GetTaskList() ([]string, error)
 	// GetJobList ジョブID一覧を取得します
@@ -72,12 +72,12 @@ func NewMongoLogData(dbUri string) (*MongoLogData, error) {
 }
 
 // GetTaskLog 指定したタスクIDのログを時間の昇順で取得します
-func (data *MongoLogData) GetTaskLog(taskID string) ([]string, error) {
+func (data *MongoLogData) GetTaskLog(taskID string) (string, error) {
 	return getLog(data.taskLogs, taskID)
 }
 
 // GetJobLog 指定したジョブIDのログを時間の昇順で取得します
-func (data *MongoLogData) GetJobLog(jobID string) ([]string, error) {
+func (data *MongoLogData) GetJobLog(jobID string) (string, error) {
 	return getLog(data.jobLogs, jobID)
 }
 
@@ -91,11 +91,11 @@ func (data *MongoLogData) GetJobList() ([]string, error) {
 	return getList(data.jobList)
 }
 
-func getLog(collection *mongo.Collection, id string) ([]string, error) {
+func getLog(collection *mongo.Collection, id string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	var retValue []string
+	retValue := ""
 	opts := options.Find()
 	opts.SetSort(bson.M{"time": 1})
 	filterCursor, err := collection.Find(ctx, bson.M{"id": id}, opts)
@@ -112,7 +112,7 @@ func getLog(collection *mongo.Collection, id string) ([]string, error) {
 		if !ok {
 			return retValue, errors.New("logのデータが存在しません")
 		}
-		retValue = append(retValue, v.(string))
+		retValue += v.(string)
 	}
 
 	return retValue, nil
