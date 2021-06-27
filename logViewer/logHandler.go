@@ -8,15 +8,15 @@ import (
 	"github.com/fluent/fluent-logger-golang/fluent"
 )
 
-type HandlerType int
+type DataType int
 
 const (
-	Task HandlerType = iota
+	Task DataType = iota
 	Job
 )
 
 type LogHandler struct {
-	handlerType     HandlerType
+	dataType        DataType
 	logTag          string
 	startTag        string
 	startLogPattern string
@@ -41,14 +41,14 @@ func (l *LogHandler) HandleLog(id string, p []byte) {
 	}
 }
 
-func NewTaskLogHandler(handlerType HandlerType, fluentConf fluent.Config) (LogHandler, error) {
+func NewTaskLogHandler(dataType DataType, fluentConf fluent.Config) (LogHandler, error) {
 	logger, err := fluent.New(fluentConf)
 	if err != nil {
 		return LogHandler{}, err
 	}
 
 	var logTag, startTag, startLogPattern string
-	switch handlerType {
+	switch dataType {
 	case Task:
 		logTag = "logViewer.task"
 		startTag = "logViewer.taskStart"
@@ -61,5 +61,5 @@ func NewTaskLogHandler(handlerType HandlerType, fluentConf fluent.Config) (LogHa
 		return LogHandler{}, errors.New("ハンドラータイプが不正です")
 	}
 
-	return LogHandler{handlerType: handlerType, logger: logger, logTag: logTag, startTag: startTag, startLogPattern: startLogPattern}, nil
+	return LogHandler{dataType: dataType, logger: logger, logTag: logTag, startTag: startTag, startLogPattern: startLogPattern}, nil
 }
