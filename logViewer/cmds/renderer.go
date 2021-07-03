@@ -63,21 +63,21 @@ func (r *Renderer) RenderIndex(wr io.Writer) error {
 
 // RenderList ログ一覧ページのレンダリング
 func (r *Renderer) RenderList(wr io.Writer, dataType logviewer.DataType) error {
-	var idList []string
+	var entries []logviewer.Summary
 	var err error
 	var logUrlBase, title string
 	switch dataType {
 	case logviewer.Task:
 		title = "TaskList"
 		logUrlBase = "task"
-		idList, err = r.data.GetTaskList()
+		entries, err = r.data.GetTaskList()
 		if err != nil {
 			return err
 		}
 	case logviewer.Job:
 		title = "JobList"
 		logUrlBase = "job"
-		idList, err = r.data.GetJobList()
+		entries, err = r.data.GetJobList()
 		if err != nil {
 			return err
 		}
@@ -88,11 +88,12 @@ func (r *Renderer) RenderList(wr io.Writer, dataType logviewer.DataType) error {
 	type logListData struct {
 		ID  string
 		URI string
+		LOG string
 	}
 
 	var logListDatas []logListData
-	for _, id := range idList {
-		logListDatas = append(logListDatas, logListData{ID: id, URI: path.Join(logUrlBase, id)})
+	for _, entry := range entries {
+		logListDatas = append(logListDatas, logListData{ID: entry.Id, URI: path.Join(logUrlBase, entry.Id), LOG: entry.FirstLog})
 	}
 
 	data := struct {

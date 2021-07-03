@@ -11,6 +11,11 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
+type Summary struct {
+	Id       string
+	FirstLog string
+}
+
 // LogData 保存されたログへのアクセスインターフェイス
 type LogData interface {
 	// GetTaskLog 指定したタスクIDのログを時間の昇順で取得します
@@ -18,9 +23,9 @@ type LogData interface {
 	// GetJobLog 指定したジョブIDのログを時間の昇順で取得します
 	GetJobLog(jobID string) (string, error)
 	// GetTaskList タスクID一覧を取得します
-	GetTaskList() ([]string, error)
+	GetTaskList() ([]Summary, error)
 	// GetJobList ジョブID一覧を取得します
-	GetJobList() ([]string, error)
+	GetJobList() ([]Summary, error)
 }
 
 // MongoLogData MongoDBに保存されたログ情報へのアクセサ
@@ -82,12 +87,12 @@ func (data *MongoLogData) GetJobLog(jobID string) (string, error) {
 }
 
 // GetTaskList タスクID一覧を取得します
-func (data *MongoLogData) GetTaskList() ([]string, error) {
+func (data *MongoLogData) GetTaskList() ([]Summary, error) {
 	return getList(data.taskList)
 }
 
 // GetJobList ジョブID一覧を取得します
-func (data *MongoLogData) GetJobList() ([]string, error) {
+func (data *MongoLogData) GetJobList() ([]Summary, error) {
 	return getList(data.jobList)
 }
 
@@ -118,11 +123,11 @@ func getLog(collection *mongo.Collection, id string) (string, error) {
 	return retValue, nil
 }
 
-func getList(collection *mongo.Collection) ([]string, error) {
+func getList(collection *mongo.Collection) ([]Summary, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	var retValue []string
+	var retValue []Summary
 	opts := options.Find()
 	opts.SetSort(bson.M{"time": 1})
 	cursor, err := collection.Find(ctx, bson.M{}, opts)
@@ -135,11 +140,15 @@ func getList(collection *mongo.Collection) ([]string, error) {
 		return retValue, err
 	}
 	for _, elem := range list {
-		v, ok := elem["id"]
+		id, ok := elem["id"]
 		if !ok {
 			return retValue, errors.New("idのデータが存在しません")
 		}
-		retValue = append(retValue, v.(string))
+		firstLog, ok := elem["firstlog"]
+		if !ok {
+			return retValue, errors.New("firstLogのデータが存在しません")
+		}
+		retValue = append(retValue, Summary{Id: id.(string), FirstLog: firstLog.(string)})
 	}
 
 	return retValue, nil

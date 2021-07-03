@@ -44,7 +44,7 @@ func (l *LogHandler) HandleLog(id string, p []byte) {
 	logStr := string(p)
 
 	if strings.Contains(logStr, l.startLogPattern) {
-		if err := l.logger.Post(l.startTag, map[string]string{"id": id}); err != nil {
+		if err := l.logger.Post(l.startTag, map[string]string{"id": id, "firstlog": logStr}); err != nil {
 			log.Printf("Warning: ログ送信に失敗しました。: %s", err.Error())
 		}
 	}

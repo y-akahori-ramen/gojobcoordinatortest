@@ -21,11 +21,22 @@
         </div>
 
         <div class="row">
-            <ul class="list-group list-group-flush">
+            <table class="table">
+                <thead>
+                  <tr>
+                    <th scope="col">ID</th>
+                    <th scope="col"></th>
+                  </tr>
+                </thead>
+                <tbody>
                 {{range .Logs}}
-                    <li class="list-group-item"><a href="{{.URI}}">{{.ID}}</a></li>
+                    <tr>
+                        <td><a href="{{.URI}}">{{.ID}}</a></td>
+                        <td>{{.LOG | log}}</td>
+                    </tr>
                 {{end}}
-              </ul>
+                </tbody>
+              </table>
         </div>
     </div>
     <script src="/docs/5.0/dist/js/bootstrap.bundle.min.js"
