@@ -7,6 +7,7 @@ require (
 	github.com/fluent/fluent-logger-golang v1.6.1
 	github.com/google/uuid v1.2.0
 	github.com/gorilla/mux v1.8.0
+	github.com/jessevdk/go-flags v1.5.0
 	github.com/kr/pretty v0.2.1 // indirect
 	github.com/tinylib/msgp v1.1.6 // indirect
 	go.mongodb.org/mongo-driver v1.5.3
