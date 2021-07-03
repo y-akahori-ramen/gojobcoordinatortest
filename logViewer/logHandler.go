@@ -15,6 +15,16 @@ const (
 	Job
 )
 
+// LogHandler Corrdinator,TaskRunner用のログハンドラ
+// ログビューアサービス用にハンドリングする。
+// ログはfluentdで送信する
+//
+// 使用例
+// loghandler, err := logviewer.NewTaskLogHandler(logviewer.Task, fluent.Config{})
+// if err != nil {
+// 	panic(err)
+// }
+// runner := gojobcoordinatortest.NewTaskRunner(gojobcoordinatortest.TaskRunnerConfig{TaskNumMax: 2, Handler: &loghandler})
 type LogHandler struct {
 	dataType        DataType
 	logTag          string
@@ -23,10 +33,13 @@ type LogHandler struct {
 	logger          *fluent.Fluent
 }
 
+// Close 終了処理。fluentdの接続解除を行う。
 func (l *LogHandler) Close() {
 	l.logger.Close()
 }
 
+// HandleLog gojobcoordinatortest.LogHandlerインターフェイスの実装
+// 受け取ったログをfulentdに送る
 func (l *LogHandler) HandleLog(id string, p []byte) {
 	logStr := string(p)
 
@@ -41,6 +54,8 @@ func (l *LogHandler) HandleLog(id string, p []byte) {
 	}
 }
 
+// NewTaskLogHandler ログハンドラの作成
+// dataTypeにログの種類を指定。タスク(TaskRunner向け)かジョブ(Corrdinator向け)かを指定する。
 func NewTaskLogHandler(dataType DataType, fluentConf fluent.Config) (LogHandler, error) {
 	logger, err := fluent.New(fluentConf)
 	if err != nil {
