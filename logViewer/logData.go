@@ -129,7 +129,7 @@ func getList(collection *mongo.Collection) ([]Summary, error) {
 
 	var retValue []Summary
 	opts := options.Find()
-	opts.SetSort(bson.M{"time": 1})
+	opts.SetSort(bson.M{"time": -1})
 	cursor, err := collection.Find(ctx, bson.M{}, opts)
 	if err != nil {
 		return retValue, err
