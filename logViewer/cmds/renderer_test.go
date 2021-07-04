@@ -36,12 +36,12 @@ func (data *logDataMock) GetJobLog(jobID string) (string, error) {
 }
 
 // GetTaskList タスクID一覧を取得します
-func (data *logDataMock) GetTaskList() ([]string, error) {
+func (data *logDataMock) GetTaskList() ([]logviewer.Summary, error) {
 	return data.getList()
 }
 
 // GetJobList ジョブID一覧を取得します
-func (data *logDataMock) GetJobList() ([]string, error) {
+func (data *logDataMock) GetJobList() ([]logviewer.Summary, error) {
 	return data.getList()
 }
 
@@ -54,10 +54,10 @@ func (data *logDataMock) getLog(id string) (string, error) {
 	}
 }
 
-func (data *logDataMock) getList() ([]string, error) {
-	var idList []string
-	for key, _ := range data.logData {
-		idList = append(idList, key)
+func (data *logDataMock) getList() ([]logviewer.Summary, error) {
+	var idList []logviewer.Summary
+	for key := range data.logData {
+		idList = append(idList, logviewer.Summary{Id: key, FirstLog: "FirstLog:" + key})
 	}
 	return idList, nil
 }
